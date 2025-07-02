@@ -9,27 +9,17 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
 import time
+from textprocessor.simple_processor import SimpleProcessor
+from textprocessor.window_processor import WindowProcessor
+import utils
+from textprocessor.processor import Processor
 
 model_name = "uer/sbert-base-chinese-nli"
 
-input_path = "./tmp/小王子-clean.txt"
-index_path = f"./tmp/小王子-index-{model_name.replace("/", "_")}.index"
-embeddings_path = f"./tmp/小王子-embeddings-{model_name.replace("/", "_")}.npy"
+input_path = "./original_text/小王子.txt"
 
 # 查询内容
 search_content = "小王子伤心"
-
-def load_sentences(input_path: str) -> list:
-    """
-    从文件中加载句子，按行读取并去除空行。
-    """
-    sentences = []
-    with open(input_path, "r", encoding="utf-8") as infile:
-        for line in infile:
-            line = line.strip()
-            if line:
-                sentences.append(line)
-    return sentences
 
 def is_file_exists(file_path: str) -> bool:
     """
@@ -50,16 +40,20 @@ def read_index(index_path: str):
     """
     return faiss.read_index(index_path)
 
-if __name__ == "__main__":
-    start_time = time.time()
+def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
+    """
+    获取 FAISS 索引，如果索引文件存在则加载，否则创建新的索引。
+    """
+    index_path = utils.get_index_path(model_name=model_name, filename="小王子", processor_name=processor_name)
+    embeddings_path = utils.get_embeddings_path(model_name=model_name, filename="小王子", processor_name=processor_name)
     if is_file_exists(index_path):
-        # 如果索引文件存在，直接读取索引
+        # 如果索引文件存在，直接读取本地保存的索引
         index = read_index(index_path)
         print(f"Index loaded from {index_path}")
     else:
-        # 如果索引文件不存在，创建索引
+        # 如果索引文件不存在，则通过向量创建索引
         print("Index file not found, creating a new index...")
-        # 加载向量
+        # 加载本地保存的向量
         sentence_embeddings: np.ndarray = np.load(embeddings_path)
         print(f"Loaded {sentence_embeddings.shape}")
         # 创建 IndexFlatL2 索引
@@ -70,15 +64,30 @@ if __name__ == "__main__":
         # 保存索引到文件
         save_index(index, index_path)
         print(f"Index saved to {index_path}")
-    # 查询向量
-    topK = 5
-    model = SentenceTransformer('uer/sbert-base-chinese-nli')
+    return index
+
+def search_index(index: faiss.Index, search_content: str, topK: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    """
+    在索引中查询向量，返回距离和索引。
+    """
+    model = SentenceTransformer(model_name)
+    # 将查询内容转换为向量
+    search_vector = model.encode([search_content])
+    # 在索引中搜索最相似的向量
+    distances, indices = index.search(search_vector, topK)
+    return distances, indices
+
+def search_with_processor(processor: Processor):
+    start_time = time.time()
+    # 生成索引
+    index = get_index(processor.name())
     search_start_time = time.time()
-    search = model.encode([search_content])
-    D, I = index.search(search, topK)
+    topK = 5
+    # 查询向量
+    D, I = search_index(index, search_content, topK)
     print("Distances:", D)
     print("Indices:", I)
-    sentences = load_sentences(input_path)
+    sentences = processor.process(input_path)
     # 输出查询结果
     for i in range(len(I[0])):
         # D[i] 是距离，越接近越相似，I[i] 是索引
@@ -86,6 +95,14 @@ if __name__ == "__main__":
         print(f"sentence: {sentences[I[0][i]]}")
         print("---------------------")
     print(f"Total time taken: {time.time() - start_time:.2f} seconds. Search time: {time.time() - search_start_time:.2f} seconds")
+
+if __name__ == "__main__":
+    print("========Using SimpleProcessor========")
+    search_with_processor(SimpleProcessor())
+    print("=====================================\n\n")
+    print("========Using WindowProcessor========")
+    search_with_processor(WindowProcessor())
+    print("=====================================")    
     
 
 # 以上代码创建了一个 L2 索引，并添加了向量数据。可以通过查询向量来获取最近的向量及其距离。
