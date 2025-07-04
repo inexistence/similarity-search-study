@@ -21,6 +21,9 @@ class WindowProcessor(Processor):
         if os.path.exists(output_path):
             return self.read_chunks_from_file(output_path)
 
+        # create tmp directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
         self.preprocess_text_file(input_path, output_path, window_size = 3, stride = 2)
         return self.read_chunks_from_file(output_path)
     

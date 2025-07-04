@@ -57,6 +57,9 @@ class SimpleProcessor(Processor):
         output_path = input_path.replace(".txt", "-simple.txt").replace("original_text/", "tmp/")
         if os.path.exists(output_path):
             return self.read_sentences_from_file(output_path)
+        
+        # create tmp directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         reuslt = []
         with open(input_path, "r", encoding="gbk") as infile, open(output_path, "w", encoding="utf-8") as outfile:
