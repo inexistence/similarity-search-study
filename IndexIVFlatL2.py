@@ -1,9 +1,9 @@
 """
-faiss 中最简单的索引，便是没有使用任何花哨技巧（压缩、分区等）的平面索引：IndexFlatL2。
-当我们使用这种索引的时候，我们查询的数据会和索引中所有数据进行距离计算，获取它们之间的 L2 距离（欧几里得距离）。
-因为它会尽职尽责的和所有数据进行比对，所以它是所有索引类型中最慢的一种，但是也是最简单和最准确的索引类型。
-同时，因为类型简单，也是内存占用量最低的类型。
-而它采取的遍历式查找，也会被从业者打趣称之为“暴力搜索”。
+对索引数据进行分区优化，将数据通过“沃罗诺伊图单元”（也被叫做泰森多边形）来进行切割（类似传统数据库分库分表）。
+当我们想要进行针对某个数据的向量相似度检索时，会先针对向量数据和“沃罗诺伊图”的质心进行计算，求出它们之间的距离。然后，将我们的搜索范围限定在它和这个质心距离覆盖的单元内。
+因为我们缩小了搜索范围，并没有像平面索引一样，进行全量的“暴力搜索”，所以我们将得到一个近似精确的答案，以及相对更快地得到数据的查询结果。
+通常情况，我们会通过增加 index.nprobe 数值，来告诉 faiss 搜索更多的“格子”，以便寻找到更合适的结果。
+我们需要根据业务的实际情况，来微调 index.nprobe 到合理的数值
 """
 from __future__ import annotations
 import numpy as np
@@ -46,7 +46,7 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
     """
     获取 FAISS 索引，如果索引文件存在则加载，否则创建新的索引。
     """
-    index_path = utils.get_index_path(model_name=model_name, filename="小王子", processor_name=processor_name, mode="IndexFlat2")
+    index_path = utils.get_index_path(model_name=model_name, filename="小王子", processor_name=processor_name, mode="IndexIVFlatL2")
     embeddings_path = utils.get_embeddings_path(model_name=model_name, filename="小王子", processor_name=processor_name)
     if is_file_exists(index_path):
         # 如果索引文件存在，直接读取本地保存的索引
@@ -59,8 +59,11 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
         sentence_embeddings: np.ndarray = np.load(embeddings_path)
         print(f"Loaded {sentence_embeddings.shape}")
         # 创建 IndexFlatL2 索引
-        dimension = sentence_embeddings.shape[1]
-        index = faiss.IndexFlatL2(dimension)  # 创建一个 L2 索引
+        dimension = sentence_embeddings.shape[1] # 索引数据维度
+        quantizer = faiss.IndexFlatL2(dimension)  # 分区索引的质心位置
+        nlist = 50 # 要划分出多少个数据分区
+        index = faiss.IndexIVFFlat(quantizer, dimension, nlist) # 创建分区索引
+        index.train(sentence_embeddings) # 添加数据之前要进行训练（https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index）
         index.add(sentence_embeddings)  # 添加向量到索引
         print(f"Index contains {index.ntotal} vectors")
         # 保存索引到文件
@@ -75,6 +78,11 @@ def search_index(index: faiss.Index, search_content: str, topK: int = 5) -> tupl
     model = SentenceTransformer(model_name)
     # 将查询内容转换为向量
     search_vector = model.encode([search_content])
+    # 指定搜索时需要检查的最近邻聚类中心数量​（即 Voronoi 单元数量）
+    # 取值为 1 到 索引构建时的 nlist 参数值（默认为 1）。
+    # 增大 nprobe​：搜索更精确（检查更多聚类区域），但速度更慢。
+    # ​减小 nprobe​：搜索更快，但可能漏掉部分相似向量。
+    index.nprobe = 1
     # 在索引中搜索最相似的向量
     distances, indices = index.search(search_vector, topK)
     return distances, indices
@@ -106,20 +114,3 @@ if __name__ == "__main__":
     search_with_processor(WindowProcessor())
     print("=====================================")    
     
-
-# 以上代码创建了一个 L2 索引，并添加了向量数据。可以通过查询向量来获取最近的向量及其距离。
-# 注意：如果向量数据量很大，建议使用更高效的索引结构，如 `IndexIVFFlat` 或 `IndexHNSWFlat` 等，这些索引可以提供更快的查询速度和更低的内存占用。
-# 这里使用 `IndexFlatL2` 主要是为了演示基本用法，实际应用中可能需要根据数据量和查询需求选择合适的索引类型。
-# # 你可以使用 `faiss.read_index` 来加载保存的索引文件。
-## ```python
-# from faiss import read_index
-# index = read_index("./tmp/小王子-index.index")
-# ```
-# # 这样就可以在后续的代码中直接使用这个索引进行查询
-# # 而不需要重新创建和添加向量。
-# # 这对于大规模数据集尤其有用，因为索引的创建和添加向量可能需要较长时间。
-# # 通过保存和加载索引，可以大大节省时间和计算资源。
-# # 另外，`faiss` 还支持多种索引类型和配置选项，可以根据具体需求进行调整。
-# # 例如，可以使用 `IndexIVFFlat` 来创建倒排索引，这样可以在大规模数据集上实现更快的查询速度。
-# # 具体的索引类型和配置选项可以参考 `faiss` 的官方文档和示例代码。
-

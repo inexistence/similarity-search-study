@@ -41,8 +41,10 @@ conda remove -n faiss --all
 
 第二步：计算向量并保存到本地。执行 `gen_vectors.py`。依赖 `sentence_transformers` 库。这里我们使用 [uer/sbert-base-chinese-nli](https://huggingface.co/uer/sbert-base-chinese-nli) 模型，`sentence-transformers` 会自动从 [HuggingFace Hub](https://huggingface.co) 下载模型。如想下载到本地使用，可以先自动下载，然后去本地缓存目录(~/.cache/huggingface/transformers)下寻找，并指定加载本地模型文件夹。这里同样保存了 `SimpleProcessor` 和 `WindowProcessor` 两种预处理数据的向量。
 
-第三步：使用 `faiss` 实现最简单的向量检索功能平面索引，同样对两种不同的预处理方式进行了查找：
-1. 平面索引(IndexFlatL2)：执行`IndexFlatL2.py`。依赖 `faiss-cpu`
+第三步：使用 `faiss` 实现最简单的向量检索功能平面索引，依赖 `faiss-cpu`，同样对两种不同的预处理方式进行了查找：
+1. 平面索引(IndexFlatL2)：执行`IndexFlatL2.py`
+2. 分区索引(IndexIVFlatL2)：执行`IndexIVFlatL2.py`
+3. 
 
 其他：
 我们这里使用的[uer/sbert-base-chinese-nli](https://huggingface.co/uer/sbert-base-chinese-nli) 模型适合用于语义相似度检索，对于提问形式的搜索并不友好，如果想加强提问形式的回答效果，可能要考虑使用其他支持问答模式的模型，如[BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3)、[shibing624/text2vec-base-chinese-sentence](https://huggingface.co/shibing624/text2vec-base-chinese-sentence)
