@@ -5,6 +5,7 @@ faiss 中最简单的索引，便是没有使用任何花哨技巧（压缩、�
 同时，因为类型简单，也是内存占用量最低的类型。
 而它采取的遍历式查找，也会被从业者打趣称之为“暴力搜索”。
 """
+from __future__ import annotations
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss

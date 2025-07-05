@@ -1,3 +1,6 @@
+# 主要用于兼容 python3.8 支持 list[str] 注解
+from __future__ import annotations
+
 class Processor:
     """
     A class to handle preprocessing tasks.

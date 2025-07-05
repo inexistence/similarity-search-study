@@ -3,19 +3,36 @@
 
 ## 环境要求
 
-执行以下命令创建环境
-
-```shell
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
 需要安装：
 1. `faiss`，用于建立索引，有cpu（`faiss-cpu`）和gpu（`faiss-gpu`）两种版本，gpu版本需有 CUDA 环境（需要 NVIDIA 显卡 + 安装好 CUDA 驱动，可能需要和你本地的 CUDA 版本匹配，否则建议用 conda 安装），这里我使用cpu版本。
 2. `sentence_transformers`，用于生成向量。
 
+方式一：直接使用pip安装，可能在许多机子上有兼容性问题，不行可以使用conda安装
 ```shell
+# 创建python虚拟环境
+python3 -m venv .venv
+source .venv/bin/activate
 pip3 install -r ./requirements.txt 
+```
+
+方式二：有些机子用 `pip` 直接安装 `paiss` 会各种报错，可以使用 [conda](https://www.anaconda.com/docs/getting-started/miniconda/main) 安装
+
+```shell
+# 创建一个干净的环境，命名为 faiss
+conda create -n faiss -y
+# 激活这个环境
+conda activate faiss
+# 安装 CPU 版本
+conda install -c pytorch python=3.8 faiss-cpu -y
+# 安装 sentence_transformers
+# 注意先激活conda环境，激活后会安装在conda环境中，否则会安装到系统全局中。
+pip3 install sentence_transformers
+```
+
+PS：如果想删除已经创建的conda环境
+
+```shell
+conda remove -n faiss --all
 ```
 
 ## 任务执行

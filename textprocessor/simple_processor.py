@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .processor import Processor
 import re
 import os
