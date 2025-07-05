@@ -51,7 +51,7 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
     if is_file_exists(index_path):
         # 如果索引文件存在，直接读取本地保存的索引
         index = read_index(index_path)
-        print(f"Index loaded from {index_path} size={str(os.path.getsize(index_path)/1024/1024)}MB")
+        print(f"Index loaded from {index_path} size={str(os.path.getsize(index_path)/1024)}KB")
     else:
         # 如果索引文件不存在，则通过向量创建索引
         print("Index file not found, creating a new index...")
@@ -65,7 +65,7 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
         print(f"Index contains {index.ntotal} vectors")
         # 保存索引到文件
         save_index(index, index_path)
-        print(f"Index saved to {index_path} size={str(os.path.getsize(index_path)/1024/1024)}MB")
+        print(f"Index saved to {index_path} size={str(os.path.getsize(index_path)/1024)}KB")
     return index
 
 def search_index(index: faiss.Index, search_content: str, topK: int = 5) -> tuple[np.ndarray, np.ndarray]:
@@ -74,9 +74,15 @@ def search_index(index: faiss.Index, search_content: str, topK: int = 5) -> tupl
     """
     model = SentenceTransformer(model_name)
     # 将查询内容转换为向量
+    encode_start = time.time()
     search_vector = model.encode([search_content])
+    encode_cost = time.time() - encode_start
+    search_start = time.time()
     # 在索引中搜索最相似的向量
     distances, indices = index.search(search_vector, topK)
+    print(f"----------------")
+    print(f"encode_cost={encode_cost*1000}ms search_cost={(time.time() - search_start)*1000}ms")
+    print(f"----------------")
     return distances, indices
 
 def search_with_processor(processor: Processor):
@@ -96,7 +102,7 @@ def search_with_processor(processor: Processor):
         print(f"Index {I[0][i]}: Distance {D[0][i]}")
         print(f"sentence: {sentences[I[0][i]]}")
         print("---------------------")
-    print(f"Total time taken: {time.time() - start_time:.2f} seconds. Search time: {time.time() - search_start_time:.2f} seconds")
+    print(f"Total time taken: {time.time() - start_time:.2f} seconds.")
 
 if __name__ == "__main__":
     print("========Using SimpleProcessor========")

@@ -1,9 +1,7 @@
 """
-对索引数据进行分区优化，将数据通过“沃罗诺伊图单元”（也被叫做泰森多边形）来进行切割（类似传统数据库分库分表）。
-当我们想要进行针对某个数据的向量相似度检索时，会先针对向量数据和“沃罗诺伊图”的质心进行计算，求出它们之间的距离。然后，将我们的搜索范围限定在它和这个质心距离覆盖的单元内。
-因为我们缩小了搜索范围，并没有像平面索引一样，进行全量的“暴力搜索”，所以我们将得到一个近似精确的答案，以及相对更快地得到数据的查询结果。
-通常情况，我们会通过增加 index.nprobe 数值，来告诉 faiss 搜索更多的“格子”，以便寻找到更合适的结果。
-我们需要根据业务的实际情况，来微调 index.nprobe 到合理的数值
+适用于海量数据以及数据快速增长的场景，能加速检索过程，同时减少内存空间占用。本例中数据量过少，无法体现。
+乘积量化索引具备一定的压缩向量数据的功能。除了划分细粒度的“工作区域”外，还预先计算了不同向量数据之间的“距离”，让每一堆向量数据都是距离这堆向量数据的质心更近的数据。
+但相比较平面索引和分区索引，faiss.IndexIVFPQ 的索引的结果精确度不高
 """
 from __future__ import annotations
 import numpy as np
@@ -46,7 +44,7 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
     """
     获取 FAISS 索引，如果索引文件存在则加载，否则创建新的索引。
     """
-    index_path = utils.get_index_path(model_name=model_name, filename="小王子", processor_name=processor_name, mode="IndexIVFlatL2")
+    index_path = utils.get_index_path(model_name=model_name, filename="小王子", processor_name=processor_name, mode="IndexIVFPQ")
     embeddings_path = utils.get_embeddings_path(model_name=model_name, filename="小王子", processor_name=processor_name)
     if is_file_exists(index_path):
         # 如果索引文件存在，直接读取本地保存的索引
@@ -58,11 +56,14 @@ def get_index(processor_name: str = "WindowProcessor") -> faiss.Index:
         # 加载本地保存的向量
         sentence_embeddings: np.ndarray = np.load(embeddings_path)
         print(f"Loaded {sentence_embeddings.shape}")
-        dimension = sentence_embeddings.shape[1] # 索引数据维度
-        quantizer = faiss.IndexFlatL2(dimension)  # 分区索引的质心位置
-        nlist = 50 # 要划分出多少个数据分区
-        index = faiss.IndexIVFFlat(quantizer, dimension, nlist) # 创建分区索引
-        index.train(sentence_embeddings) # 添加数据之前要进行训练（https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index）
+        # 创建 IndexFlatL2 索引
+        dimension = sentence_embeddings.shape[1]
+        quantizer = faiss.IndexFlatL2(dimension)
+        nlist = 50
+        m = 8
+        nbits_per_idx = 8
+        index = faiss.IndexIVFPQ(quantizer, dimension, nlist, m, nbits_per_idx) 
+        index.train(sentence_embeddings)
         index.add(sentence_embeddings)  # 添加向量到索引
         print(f"Index contains {index.ntotal} vectors")
         # 保存索引到文件
@@ -76,16 +77,9 @@ def search_index(index: faiss.Index, search_content: str, topK: int = 5) -> tupl
     """
     model = SentenceTransformer(model_name)
     # 将查询内容转换为向量
-    model = SentenceTransformer(model_name)
-    # 将查询内容转换为向量
     encode_start = time.time()
     search_vector = model.encode([search_content])
     encode_cost = time.time() - encode_start
-    # 指定搜索时需要检查的最近邻聚类中心数量​（即 Voronoi 单元数量）
-    # 取值为 1 到 索引构建时的 nlist 参数值（默认为 1）。
-    # 增大 nprobe​：搜索更精确（检查更多聚类区域），但速度更慢。
-    # ​减小 nprobe​：搜索更快，但可能漏掉部分相似向量。
-    index.nprobe = 1
     search_start = time.time()
     # 在索引中搜索最相似的向量
     distances, indices = index.search(search_vector, topK)
@@ -100,6 +94,7 @@ def search_with_processor(processor: Processor):
     index = get_index(processor.name())
     search_start_time = time.time()
     topK = 5
+    index.nprobe = 1
     # 查询向量
     D, I = search_index(index, search_content, topK)
     print("Distances:", D)
