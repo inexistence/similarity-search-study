@@ -32,6 +32,9 @@ pip3 install sentence_transformers
 PS：如果想删除已经创建的conda环境
 
 ```shell
+# 展示环境列表
+conda env list
+# 删除特定环境
 conda remove -n faiss --all
 ```
 
